@@ -1,122 +1,90 @@
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+# Import de las librerias
+from errno import ERANGE
+import random
 import time
-import gym
 import os
 import numpy as np
 from ns3gym import ns3env
 import matplotlib.pyplot as plt
 
-# Environment initialization
-port = 5555
+# Inicialización de las variables de entorno
+port = 2222
 simTime = 100
 startSim = True
-stepTime = 0.1
+stepTime = 0.6
 seed = 0
 simArgs = {"--distance": 500}
 debug = False
 
-
-
 env = ns3env.Ns3Env(port=port, stepTime=stepTime, startSim=startSim, simSeed=seed, simArgs=simArgs, debug=debug)
 
-ob_space = env.observation_space.shape[0]
-ac_space = env.action_space.shape[0]
-print("Observation space: ", ob_space)
-print("Action space: ", ac_space)
+# Inicialización de la Q-tabla con los valores obtenidos del entorno
+Q = np.zeros((3000, 3000))
 
-# Q and rewards
-##Q = np.zeros(shape=(5, 11, 10), dtype=np.float)
-##Q = np.zeros((ob_space, ac_space))
-Q = np.zeros((2000, 2000))
-
-##action = np.zeros(shape=(5), dtype=np.uint)
-
-rewards = []
-iterations = []
-epsilons = []
-
-# Parameters
-alpha = 0.75
-discount = 0.95
-episodes = 10
+# Parametros 
+# La variable alpha determina el ratio de aprendizaje
+alpha = 0.75                  
+discount_factor = 0.95               
 epsilon = 1                  
 max_epsilon = 1
 min_epsilon = 0.01         
-decay = 0.01
+decay = 0.01         
 
-# Episodes
-for episode in range(episodes):
-    # Refresh state
-    state = env.reset()
-    ##state = np.uint(np.array(state, dtype=np.uint32) / 10)
-    done = False
-    t_reward = 0
+train_episodes = 30    
+test_episodes = 100          
+max_steps = 100 
 
-    i = 0
-    # Run episode
-    while True:
-        if done:
-            break
-        exp_exp_tradeoff = np.random.uniform(0, 1) 
-        ##i += 1
-        if exp_exp_tradeoff > epsilon:
-            action = np.argmax(Q[state,:]) 
-        else:
-            action = env.action_space.sample()
+# Episodios (Entrenamiento del agente)
+
+# Lista para los valores de recompensa
+training_rewards = []  
+
+for episode in range(train_episodes):
+
+    # Se restablece el entorno por cada episodio
+    state = env.reset()    
+
+    # Inicialización de las recompensas
+    total_training_rewards = 0
+    
+    for step in range(100):
+        
+        # Se realiza una verificación y de este resultado se selecciona la acción a realizar
+        action = env.action_space.sample()
+            
+        # A partir de la acción se procede a realizar el siguiente paso en el entorno obteniendo el nuevo estado y la recompensa
         new_state, reward, done, info = env.step(action)
-        Q[state, action] = Q[state, action]+alpha*(reward+discount*
-        np.max(Q[new_state, :])-Q[state, action]) 
-        #Increasing our total reward and updating the state
-        t_reward += reward      
+        
+        # Se procede a actualizar la Q-tabla utilizando la ecuación de Bellman
+        Q[state, action] = Q[state, action] + alpha * (reward + discount_factor * np.max(Q[new_state, :]) - Q[state, action]) 
+        
+        # Se actualizan las variables con los resultados obtenidos
+        total_training_rewards += reward      
         state = new_state         
         
-        #Ending the episode
+        # Se finaliza el episodio
         if done == True:
-            #print ("Total reward for episode {}: {}".format(episode, 
-            #total_training_rewards))
+            print ("Recompensa total del episodio {}: {}".format(episode, total_training_rewards))
             break
     
-    #Cutting down on exploration by reducing the epsilon 
-    epsilon = min_epsilon+(max_epsilon-min_epsilon)*np.exp(-decay*episode)
+    # Se agrega la recompensa total y los valores de épsilon
+    training_rewards.append(total_training_rewards)
+
     
-    #Adding the total reward and reduced epsilon values
-    epsilons.append(epsilon)
-    """current = state
-        for n in range(5):
-            # Action that maximize the simulation
-            action[n] = np.argmax(Q[n, current[n], :] + np.random.randn(1, 10) * (1 / float(episode + 1)))
+print ("Puntuación de entrenamiento a lo largo del tiempo: " + str(sum(training_rewards)/train_episodes))
 
-        # Send action to the simulation
-        saction = np.uint(action * 100) + 1
-        state, reward, done, info = env.step(saction)
-        state = np.uint(np.array(state) / 10 )
-
-        # Save reward and action on Q-Table
-        t_reward += reward
-        for n in range(5):
-            Q[n, current[n], action[n]] += alpha * (reward + discount * np.max(Q[n, state[n], :]) - Q[n, current[n], action[n]])"""
-print("Total reward:", t_reward)
-rewards.append(t_reward)
-iterations.append(i)
-
-# Close environment
+# Se cierra el entorno
 env.close()
 
-# Plot results
-def chunks_func(l, n):
-    n = max(1, n)
-    return (l[i:i+n] for i in xrange(0, len(l), n))
-
-size = episodes
-#chunks = list(chunk_list(rewards, size))
-rewards = np.array(rewards)
-chunks = np.array_split(rewards, size)
-#chunks = chunks_func(rewards, size)
-averages = [sum(chunk) / len(chunk) for chunk in chunks]
-
-plt.plot(averages)
-plt.xlabel('Episode')
-plt.ylabel('Average Reward')
+# Se imprimen los resultados obtenidos
+# Se visualizan los resultados y la recompensa total en todos los episodios
+x = range(train_episodes)
+plt.plot(x, training_rewards)
+plt.xlabel('Episodio')
+plt.ylabel('Recompensa total del entrenamiento')
+plt.title('Recompensas totales en todos los episodios de entrenamiento') 
 plt.show()

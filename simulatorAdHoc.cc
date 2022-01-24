@@ -1,14 +1,14 @@
 #include "ns3/command-line.h"
 #include "ns3/config.h"
-#include "ns3/uinteger.h"
-#include "ns3/double.h"
 #include "ns3/string.h"
+#include "ns3/double.h"
+#include "ns3/uinteger.h"
 #include "ns3/log.h"
+#include "ns3/yans-wifi-channel.h"
+#include "ns3/mobility-model.h"
 #include "ns3/yans-wifi-helper.h"
 #include "ns3/mobility-helper.h"
 #include "ns3/ipv4-address-helper.h"
-#include "ns3/yans-wifi-channel.h"
-#include "ns3/mobility-model.h"
 #include "ns3/olsr-helper.h"
 #include "ns3/ipv4-static-routing-helper.h"
 #include "ns3/ipv4-list-routing-helper.h"
@@ -18,59 +18,51 @@
 using namespace ns3;
 
 
-// Counters of number of packages received and number of packages sent
-int received = 0;
-int sent = 0;
+//Contador de número de paquetes enviados y recibidos
+int recibidos = 0;
+int enviados = 0;
 
-// Observation Space
 Ptr<OpenGymSpace> MyGetObservationSpace(void)
 {
-  // X position of the 2-hierarchy nodes
-  uint32_t nodeNum = 6;
-  float low = 400.0;
-  float high = 800.0;
-  std::vector<uint32_t> shape = {nodeNum,};
+  uint32_t numNodos = 6;
+  float min = 400.0;
+  float max = 800.0;
+  std::vector<uint32_t> shape = {numNodos,};
   std::string dtype = TypeNameGet<uint32_t> ();
-  Ptr<OpenGymBoxSpace> space = CreateObject<OpenGymBoxSpace> (low, high, shape, dtype);
+  Ptr<OpenGymBoxSpace> space = CreateObject<OpenGymBoxSpace> (min, max, shape, dtype);
   NS_LOG_UNCOND ("MyGetObservationSpace: " << space);
   return space;
 }
 
-// Action Space
 Ptr<OpenGymSpace> MyGetActionSpace(void)
 {
-  // X position of the 2-hierarchy nodes
-  uint32_t nodeNum = 6;
-  float low = 400.0;
-  float high = 800.0;
-  std::vector<uint32_t> shape = {nodeNum,};
+  uint32_t numNodos = 6;
+  float min = 400.0;
+  float max = 800.0;
+  std::vector<uint32_t> shape = {numNodos,};
   std::string dtype = TypeNameGet<uint32_t> ();
-  Ptr<OpenGymBoxSpace> space = CreateObject<OpenGymBoxSpace> (low, high, shape, dtype);
+  Ptr<OpenGymBoxSpace> space = CreateObject<OpenGymBoxSpace> (min, max, shape, dtype);
   NS_LOG_UNCOND ("MyGetActionSpace: " << space);
   return space;
 }
 
-// Game over condition
 bool MyGetGameOver(void)
 {
-  // Activate game over condition when the stepcounter reach 20
   bool isGameOver = false;
-  static float stepCounter = 0.0;
-  stepCounter += 1;
-  if (stepCounter == 20) {
+  static float contador = 0.0;
+  contador += 1;
+  if (contador == 20) {
       isGameOver = true;
   }
-  NS_LOG_UNCOND ("MyGetGameOver: " << isGameOver);
+  NS_LOG_UNCOND ("Game Over: " << isGameOver);
   return isGameOver;
 }
 
-// Get observation of current state from the environment
 Ptr<OpenGymDataContainer> MyGetObservation(void)
 {
-  //Define the base observation space
-  uint32_t nodeNum = 6;
+  uint32_t numNodos = 6;
 
-  std::vector<uint32_t> shape = {nodeNum,};
+  std::vector<uint32_t> shape = {numNodos,};
   Ptr<OpenGymBoxContainer<uint32_t> > box = CreateObject<OpenGymBoxContainer<uint32_t> >(shape);
   uint32_t nodeNum2 = NodeList::GetNNodes ();
     for (uint32_t i=0; i<nodeNum2; i++)
@@ -78,46 +70,39 @@ Ptr<OpenGymDataContainer> MyGetObservation(void)
       Ptr<Node> node = NodeList::GetNode(i);
       if (node->GetSystemId() == 0) {
 
-        //Extract the position from the hierarchy 2 nodes
         Ptr<MobilityModel> cpMob = node->GetObject<MobilityModel>();
         Vector m_position = cpMob->GetPosition();
         box->AddValue(m_position.x);
       }
     }
-  NS_LOG_UNCOND ("MyGetObservation: " << box);
+  NS_LOG_UNCOND ("Vector de Observación: " << box);
   return box;
 }
 
-// Get reward from the environment
 float MyGetReward(void)
 {
   static float reward = 0;
-  if(sent > 0) {
-    // Quotient between the number of packages received and the number of packages sent
-    reward = ((received*1.0)/(sent*1.0));
+  if(enviados > 0) {
+    reward = ((recibidos*1.0)/(enviados*1.0));
   }
     NS_LOG_UNCOND(reward);
-    NS_LOG_UNCOND(received);
+    NS_LOG_UNCOND(recibidos);
   return reward;
 }
 
-// Main function for agent actions execution
 bool MyExecuteActions(Ptr<OpenGymDataContainer> action)
 {
-  NS_LOG_UNCOND ("MyExecuteActions: " << action);
+  NS_LOG_UNCOND ("Acciones Ejecutadas: " << action);
   
-  // Get and format actions
   Ptr<OpenGymBoxContainer<uint32_t> > box = DynamicCast<OpenGymBoxContainer<uint32_t> >(action);
   std::vector<uint32_t> actionVector = box->GetData();
 
-  uint32_t nodeNum = NodeList::GetNNodes ();
-  //Iterate over nodes and check if the nodes are the ones of the second hierarchy
-  for (uint32_t i=0; i<nodeNum; i++)
+  uint32_t numNodos = NodeList::GetNNodes ();
+  for (uint32_t i=0; i<numNodos; i++)
   {
     Ptr<Node> node = NodeList::GetNode(i);
     if (node->GetSystemId() == 0) {
 
-      //Set location of the nodes of the second hierarchy
       Ptr<MobilityModel> cpMob = node->GetObject<MobilityModel>();
       Vector m_position = cpMob->GetPosition();
       m_position.x = actionVector.at(i);
@@ -128,44 +113,37 @@ bool MyExecuteActions(Ptr<OpenGymDataContainer> action)
   return true;
 }
 
-//Traffic generator
 static void GenerateTraffic (Ptr<Socket> socket, uint32_t pktSize,
                              uint32_t pktCount, Time pktInterval )
 {
-  //Increment sent counter 
-  sent += 1;
+  enviados += 1;
 
-  //Send package
   socket->Send (Create<Packet> (pktSize));  
 }
 
 
-// Main controller of the simulation
-void ScheduleNextStateRead(double envStepTime, Ptr<OpenGymInterface> openGym, Ptr<Socket> source, uint32_t packetSize,
-                             uint32_t numPackets, Time interPacketInterval)
+void ScheduleNextStateRead(double envStepTime, Ptr<OpenGymInterface> openGym, Ptr<Socket> source, uint32_t tamanoPaquete,
+                             uint32_t numeroPaquetes, Time interPacketInterval)
 {
 
-  //Generate traffic from source node to objective node
-  GenerateTraffic(source, packetSize, numPackets, interPacketInterval);
-  GenerateTraffic(source, packetSize, numPackets, interPacketInterval);
-  GenerateTraffic(source, packetSize, numPackets, interPacketInterval);
-  GenerateTraffic(source, packetSize, numPackets, interPacketInterval);
-  GenerateTraffic(source, packetSize, numPackets, interPacketInterval);
-  GenerateTraffic(source, packetSize, numPackets, interPacketInterval);
+  GenerateTraffic(source, tamanoPaquete, numeroPaquetes, interPacketInterval);
+  GenerateTraffic(source, tamanoPaquete, numeroPaquetes, interPacketInterval);
+  GenerateTraffic(source, tamanoPaquete, numeroPaquetes, interPacketInterval);
+  GenerateTraffic(source, tamanoPaquete, numeroPaquetes, interPacketInterval);
+  GenerateTraffic(source, tamanoPaquete, numeroPaquetes, interPacketInterval);
+  GenerateTraffic(source, tamanoPaquete, numeroPaquetes, interPacketInterval);
 
-  //Schedule next simulation time 
   Simulator::Schedule (Seconds (envStepTime), &ScheduleNextStateRead, envStepTime, openGym,
-                       source, packetSize, numPackets, interPacketInterval);
+                       source, tamanoPaquete, numeroPaquetes, interPacketInterval);
   openGym->NotifyCurrentState();
 }
 
-// Funcion that is triggered when the objective node receives a package
 void ReceivePacket (Ptr<Socket> socket)
 {
   while (socket->Recv ())
     {
-      NS_LOG_UNCOND ("Received one packet!");
-      received += 1;
+      NS_LOG_UNCOND ("Paquete Recibido!");
+      recibidos += 1;
     }
 }
 
@@ -173,47 +151,42 @@ void ReceivePacket (Ptr<Socket> socket)
 int main (int argc, char *argv[])
 {
   std::string phyMode ("DsssRate1Mbps");
-  double distance = 5;  // m
-  uint32_t packetSize = 1000; // bytes
-  uint32_t numPackets = 10;
-  uint32_t numNodes = 4;  // by default, 5x2
-  uint32_t sinkNode = 0; // objective node of cluster 1
-  uint32_t sourceNode = 3; //source node  of cluster 3
-  double envStepTime = 0.6; //seconds, ns3gym env step time interval
-  double interval = 0.1; // seconds
-
-  CommandLine cmd; //(__FILE__);
-  cmd.AddValue ("distance", "distance (m)", distance);
+  double distancia = 5;  // metros
+  uint32_t tamanoPaquete = 500; // bytes
+  uint32_t numeroPaquetes = 10;
+  uint32_t numeroNodos = 10;   
+  uint32_t nodoReceptor = 1; 
+  uint32_t nodoFuente = 2; 
+  double envStepTime = 0.6;
+    double interval = 0.1; 
+  CommandLine cmd; 
+  cmd.AddValue ("Distancia", "Distancia (m)", distancia);
  
   cmd.Parse (argc, argv);
-  // Convert to time object
   Time interPacketInterval = Seconds (interval);
 
-  // Fix non-unicast data rate to be the same as that of unicast
   Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",
                       StringValue (phyMode));
 
 
-  //Cluster and node creation
-  NodeContainer hierar2Nodes;
-  hierar2Nodes.Create(6, 0);
+  NodeContainer nodosJerarquicos;
+  nodosJerarquicos.Create(6, 0);
 
-  NodeContainer c1;
-  c1.Add(hierar2Nodes.Get(0));
-  c1.Add(hierar2Nodes.Get(1));
-  c1.Create (numNodes, 1);
+  NodeContainer contenedor1;
+  contenedor1.Add(nodosJerarquicos.Get(0));
+  contenedor1.Add(nodosJerarquicos.Get(1));
+  contenedor1.Create (numeroNodos, 1);
 
-  NodeContainer c2;
-  c2.Add(hierar2Nodes.Get(2));
-  c2.Add(hierar2Nodes.Get(3));
-  c2.Create (numNodes, 2);
+  NodeContainer contenedor2;
+  contenedor2.Add(nodosJerarquicos.Get(2));
+  contenedor2.Add(nodosJerarquicos.Get(3));
+  contenedor2.Create (numeroNodos, 2);
   
-  NodeContainer c3;
-  c3.Add(hierar2Nodes.Get(4));
-  c3.Add(hierar2Nodes.Get(5));
-  c3.Create (numNodes, 2);
+  NodeContainer contenedor3;
+  contenedor3.Add(nodosJerarquicos.Get(4));
+  contenedor3.Add(nodosJerarquicos.Get(5));
+  contenedor3.Create (numeroNodos, 2);
 
-  // The below set of helpers will help us to put together the wifi NICs we want
   WifiHelper wifi;
 
   YansWifiPhyHelper wifiPhy =  YansWifiPhyHelper::Default ();
@@ -242,36 +215,36 @@ int main (int argc, char *argv[])
                                 "ControlMode",StringValue (phyMode));
   // Set it to adhoc mode
   wifiMac.SetType ("ns3::AdhocWifiMac");
-  NetDeviceContainer devices1 = wifi.Install (wifiPhy, wifiMac, c1);
-  NetDeviceContainer devices2 = wifi.Install (wifiPhy, wifiMac, c2);
-  NetDeviceContainer devices3 = wifi.Install (wifiPhy, wifiMac, c3);
-  NetDeviceContainer devicesHierar2 = wifi.Install (wifiPhy, wifiMac, hierar2Nodes);
+  NetDeviceContainer devices1 = wifi.Install (wifiPhy, wifiMac, contenedor1);
+  NetDeviceContainer devices2 = wifi.Install (wifiPhy, wifiMac, contenedor2);
+  NetDeviceContainer devices3 = wifi.Install (wifiPhy, wifiMac, contenedor3);
+  NetDeviceContainer devicesHierar2 = wifi.Install (wifiPhy, wifiMac, nodosJerarquicos);
 
   // Mobility models creation
   MobilityHelper mobility;
   mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
-                                 "MinX", DoubleValue (500),
-                                 "MinY", DoubleValue (205),
-                                 "DeltaX", DoubleValue (distance),
-                                 "DeltaY", DoubleValue (distance),
+                                 "MinX", DoubleValue (400),
+                                 "MinY", DoubleValue (120),
+                                 "DeltaX", DoubleValue (distancia),
+                                 "DeltaY", DoubleValue (distancia),
                                  "GridWidth", UintegerValue (5),
                                  "LayoutType", StringValue ("RowFirst"));
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   MobilityHelper mobility2;
   mobility2.SetPositionAllocator ("ns3::GridPositionAllocator",
-                                 "MinX", DoubleValue (650),
-                                 "MinY", DoubleValue (-205),
-                                 "DeltaX", DoubleValue (distance),
-                                 "DeltaY", DoubleValue (distance),
+                                 "MinX", DoubleValue (600),
+                                 "MinY", DoubleValue (-150),
+                                 "DeltaX", DoubleValue (distancia),
+                                 "DeltaY", DoubleValue (distancia),
                                  "GridWidth", UintegerValue (5),
                                  "LayoutType", StringValue ("RowFirst"));
   mobility2.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   MobilityHelper mobility3;
   mobility3.SetPositionAllocator ("ns3::GridPositionAllocator",
-                                 "MinX", DoubleValue (750),
-                                 "MinY", DoubleValue (205),
-                                 "DeltaX", DoubleValue (distance),
-                                 "DeltaY", DoubleValue (distance),
+                                 "MinX", DoubleValue (800),
+                                 "MinY", DoubleValue (120),
+                                 "DeltaX", DoubleValue (distancia),
+                                 "DeltaY", DoubleValue (distancia),
                                  "GridWidth", UintegerValue (5),
                                  "LayoutType", StringValue ("RowFirst"));
   mobility3.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
@@ -279,18 +252,16 @@ int main (int argc, char *argv[])
   mobilityHierar2.SetPositionAllocator ("ns3::GridPositionAllocator",
                                  "MinX", DoubleValue (600),
                                  "MinY", DoubleValue (0),
-                                 "DeltaX", DoubleValue ((1)+3*distance),
-                                 "DeltaY", DoubleValue (distance),
+                                 "DeltaX", DoubleValue ((1)+3*distancia),
+                                 "DeltaY", DoubleValue (distancia),
                                  "GridWidth", UintegerValue (6),
                                  "LayoutType", StringValue ("RowFirst"));
   mobility3.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  // Mobility models installation
-  mobility.Install (c1);
-  mobility2.Install (c2);
-  mobility3.Install (c3);
-  mobilityHierar2.Install (hierar2Nodes);
+  mobility.Install (contenedor1);
+  mobility2.Install (contenedor2);
+  mobility3.Install (contenedor3);
+  mobilityHierar2.Install (nodosJerarquicos);
 
-  // Enable OLSR
   OlsrHelper olsr;
   OlsrHelper olsr2;
   Ipv4StaticRoutingHelper staticRouting;
@@ -300,36 +271,32 @@ int main (int argc, char *argv[])
   list.Add (olsr, 30);
   InternetStackHelper internet;
 
-  // Internet installation
   internet.SetRoutingHelper (list);
-  internet.Install (c1);
-  internet.Install (c2);
-  internet.Install (c3);
+  internet.Install (contenedor1);
+  internet.Install (contenedor2);
+  internet.Install (contenedor3);
 
 
-  // IP assignation
   Ipv4AddressHelper ipv4;
-  NS_LOG_INFO ("Assign IP Addresses.");
   ipv4.SetBase ("10.1.1.0", "255.255.255.0");
-  Ipv4InterfaceContainer i1 = ipv4.Assign (devices1);
-  Ipv4InterfaceContainer i4 = ipv4.Assign (devicesHierar2);
-  Ipv4InterfaceContainer i2 = ipv4.Assign (devices2);
-  Ipv4InterfaceContainer i3 = ipv4.Assign (devices3);
+  Ipv4InterfaceContainer IP1 = ipv4.Assign (devices1);
+  Ipv4InterfaceContainer IP4 = ipv4.Assign (devicesHierar2);
+  Ipv4InterfaceContainer IP2 = ipv4.Assign (devices2);
+  Ipv4InterfaceContainer IP3 = ipv4.Assign (devices3);
 
   // Socket definition and package source and objective preparation
   TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
-  Ptr<Socket> recvSink = Socket::CreateSocket (c1.Get (sinkNode), tid);
+  Ptr<Socket> recvSink = Socket::CreateSocket (contenedor1.Get (nodoReceptor), tid);
   InetSocketAddress local = InetSocketAddress (Ipv4Address::GetAny (), 80);
   recvSink->Bind (local);
   recvSink->SetRecvCallback (MakeCallback (&ReceivePacket));
 
-  Ptr<Socket> source = Socket::CreateSocket (c3.Get (sourceNode), tid);
-  InetSocketAddress remote = InetSocketAddress (i1.GetAddress (sinkNode, 0), 80);
+  Ptr<Socket> source = Socket::CreateSocket (contenedor3.Get (nodoFuente), tid);
+  InetSocketAddress remote = InetSocketAddress (IP1.GetAddress (nodoReceptor, 0), 80);
   source->Connect (remote);
 
   
-  //OPEN Gym connection
-  uint32_t openGymPort = 5555;
+  uint32_t openGymPort = 2222;
   Ptr<OpenGymInterface> openGym = CreateObject<OpenGymInterface> (openGymPort);
   openGym->SetGetActionSpaceCb( MakeCallback (&MyGetActionSpace) );
   openGym->SetGetObservationSpaceCb( MakeCallback (&MyGetObservationSpace) );
@@ -337,12 +304,11 @@ int main (int argc, char *argv[])
   openGym->SetGetObservationCb( MakeCallback (&MyGetObservation) );
   openGym->SetGetRewardCb( MakeCallback (&MyGetReward) );
   openGym->SetExecuteActionsCb( MakeCallback (&MyExecuteActions) );
-  Simulator::Schedule (Seconds(0.0), &ScheduleNextStateRead, envStepTime, openGym, source, packetSize, numPackets, interPacketInterval);
+  Simulator::Schedule (Seconds(0.0), &ScheduleNextStateRead, envStepTime, openGym, source,
+  tamanoPaquete, numeroPaquetes, interPacketInterval);
 
-  // Output what we are doing
-  NS_LOG_UNCOND ("Testing from node " << sourceNode << " to " << sinkNode << " with grid distance " << distance);
+  NS_LOG_UNCOND ("Prueba desde el nodo " << nodoFuente << " al nodo " << nodoReceptor << " con distancia de  " << distancia);
 
-  //Simulation run
   Simulator::Run ();
   Simulator::Stop (Seconds (100));
   Simulator::Destroy ();
